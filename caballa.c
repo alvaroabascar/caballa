@@ -1,13 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpc.h>
+#include <math.h>
+
+/* *********** WINDOWS SHIT *********** */
 
 /* If we are compiling on Windows compile these functions */
 #ifdef _WIN32
 #include <string.h>
-
 static char buffer[2048];
-
 /* Fake readline function */
 char *readline(char *prompt)
 {
@@ -18,9 +19,10 @@ char *readline(char *prompt)
     cpy[strlen(cpy) - 1] = '\0';
     return cpy;
 }
-
 /* Fake add_hisotry function */
 void add_history(char *unused) {}
+
+/* *********** / WINDOWS SHIT *********** */
 
 /* Otherwise include the editline headers */
 #else
@@ -28,35 +30,108 @@ void add_history(char *unused) {}
 #include <editline/history.h>
 #endif
 
-/* Use operator string to see which operation to perform, perform it. */
-long eval_op(long x, char *op, long y)
+#define min(a, b) ((a > b) ? b : a)
+#define max(a, b) ((a < b) ? b : a)
+
+/* struct to hold the result of an evaluation */
+typedef struct {
+    int type;
+    long num;
+    int err;
+} lval;
+/* possible lval types */
+enum { LVAL_NUM, LVAL_ERR };
+/* possible error types */
+enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
+
+/* create a new lval of type number */
+lval lval_num(long x)
 {
-    if (strcmp(op, "+") == 0) { return x + y; }
-    if (strcmp(op, "-") == 0) { return x - y; }
-    if (strcmp(op, "*") == 0) { return x * y; }
-    if (strcmp(op, "/") == 0) { return x / y; }
-    if (strcmp(op, "%") == 0) { return x % y; }
-    return 0;
+    lval v;
+    v.type = LVAL_NUM;
+    v.num = x;
+    return v;
+}
+
+/* create a new lval of type error */
+lval lval_err(int x)
+{
+    lval v;
+    v.type = LVAL_ERR;
+    v.err = x;
+    return v;
+}
+
+void print_error(char *msg)
+{
+    printf("Error: %s\n", msg);
+}
+
+/* print a lval */
+void lval_print(lval v)
+{
+    switch(v.type) {
+        /* lval is a number? print it */
+        case LVAL_NUM:
+            printf("%li\n", v.num);
+            break;
+
+        /* lval is an error? check type, print it */
+        case LVAL_ERR:
+            if (v.err == LERR_DIV_ZERO)
+                print_error("Division by zero!");
+            if (v.err == LERR_BAD_OP)
+                print_error("Invalid operator!");
+            if (v.err == LERR_BAD_NUM)
+                print_error("Invalud number!");
+            break;
+    }
+}
+
+/* print a lval followed by a newline */
+void lval_println(lval v)
+{
+    lval_print(v);
+    putchar('\n');
+}
+
+/* Use operator string to see which operation to perform, perform it. */
+lval eval_op(lval x, char *op, lval y)
+{
+    /* if either value is an error, return it */
+    if (x.type == LVAL_ERR) { return x; }
+    if (y.type == LVAL_ERR) { return y; }
+
+    /* otherwise do maths on the numbers, create and return a lval of type number */
+    if (strcmp(op, "+") == 0) { return lval_num(x.num + y.num); }
+    if (strcmp(op, "-") == 0) { return lval_num(x.num - y.num); }
+    if (strcmp(op, "*") == 0) { return lval_num(x.num * y.num); }
+    if (strcmp(op, "%") == 0) { return lval_num(x.num % y.num); }
+    if (strcmp(op, "/") == 0) {
+        return (y.num == 0) ? lval_err(LERR_DIV_ZERO) : lval_num(x.num / y.num);
+    }
+    
+    return lval_err(LERR_BAD_OP);
 }
 
 /* Evaluate the Abstract Syntax Tree */
-long eval(mpc_ast_t *t)
+lval eval(mpc_ast_t *t)
 {
     /* If it is a number return it */
-    if (strstr(t->tag, "number"))
-        return atoi(t->contents);
-
-    int i;
-    long x;
-    char *op;
+    if (strstr(t->tag, "number")) {
+        errno = 0;
+        long x = strtol(t->contents, NULL, 10);
+        return errno != ERANGE ? lval_num(x): lval_err(LERR_BAD_NUM);
+    }
 
     /* The operator is always second child (first is '(') */
-    op = t->children[1]->contents;
+    char *op = t->children[1]->contents;
 
     /* We store the third child in x */
-    x = eval(t->children[2]);
+    lval x = eval(t->children[2]);
 
     /* Iterate the remaining children and combining. */
+    int i;
     for (i=3; strstr(t->children[i]->tag, "expr"); i++)
         x = eval_op(x, op, eval(t->children[i]));
 
@@ -97,7 +172,7 @@ int main(int argc, char *argv[])
         /* Attempt to parse the user input */
         if (mpc_parse("<stdin>", input, Caballa, &r)) {
             /* On success print the result of evaluation */
-            printf("%li\n", eval(r.output));
+            lval_println(eval(r.output));
             mpc_ast_delete(r.output);
         } else {
             /* Otherwise print the error */
