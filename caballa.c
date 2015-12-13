@@ -34,33 +34,95 @@ void add_history(char *unused) {}
 #define max(a, b) ((a < b) ? b : a)
 
 /* struct to hold the result of an evaluation */
-typedef struct {
+typedef struct lval {
     int type;
     long num;
-    int err;
+    /* Error and symbol types have some string data */
+    char *err;
+    char *sym;
+    /* Count and pointer to a list of "lval*" */
+    int count;
+    struct lval **cell;
 } lval;
-/* possible lval types */
-enum { LVAL_NUM, LVAL_ERR };
-/* possible error types */
-enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
-/* create a new lval of type number */
-lval lval_num(long x)
+
+/* possible lval types
+ * LVAL_ERR: an error
+ * LVAL_NUM: a number
+ * LVAL_SYM: a symbol (eg. operators, variables)
+ * LVAL_SEXPR: a symbolic expression (S-Expression). A S-Expression is a
+ *             variable length list of other values.
+ *             (http://www.buildyourownlisp.com/chapter9_s_expressions)
+ */
+enum { LVAL_ERR, LLVAL_NUM, LVAL_SYM, LVAL_SEXPR };
+
+/* construct a pointer to a new Number lval */
+lval* lval_num(long x)
 {
-    lval v;
-    v.type = LVAL_NUM;
-    v.num = x;
+    lval* v = malloc(sizeof(lval));
+    v->type = LVAL_NUM;
+    v->num = x;
     return v;
 }
 
-/* create a new lval of type error */
-lval lval_err(int x)
+/* construct a pointer to a new Error lval */
+lval* lval_err(char *m)
 {
-    lval v;
-    v.type = LVAL_ERR;
-    v.err = x;
+    lval *v = malloc(sizeof(lval));
+    v->type = LVAL_ERR;
+    v->err = malloc(strlen(m) + 1);
+    strcpy(v->err, m);
     return v;
 }
+
+/* construct a pointer to a new Symbol lval */
+lval* lval_sym(char *s)
+{
+    lval *v = malloc(sizeof(lval));
+    v->type = LVAL_SYM;
+    v->sym = malloc(strlen(s) + 1);
+    strcpy(v->sym, s);
+    return v;
+}
+
+/* a pointer to a new empty Sexpr lval */
+lval* lval_sexpr(void)
+{
+    lval *v = malloc(sizeof(lval));
+    v->type = LVAL_SEXPR;
+    v->count = 0;
+    v->cell = NULL;
+    return v;
+}
+
+void lval_del(lval *v)
+{
+    switch (v->type) {
+        /* Do nothing special for number type. */
+        case LVAL_NUM:
+            break;
+
+        /* For Err or Sym free the string data. */
+        case LVAL_ERR:
+            free(v->err);
+            break;
+        case LVAL_SYM:
+            free(v->sym);
+            break;
+
+        /* If Sexpr then delete all elements inside. */
+        case LVAL_SEXPR:
+            for (int i = 0; i < v->count; i++) {
+                lval_del(v->cell[i]);
+            }
+            /* Also free the memory allocated to contain the pointers. */
+            free(v->cell);
+            break;
+    }
+    /* Free the memory allocated for the "lval" struct itself. */
+    free(v);
+}
+
 
 void print_error(char *msg)
 {
@@ -81,7 +143,7 @@ void lval_print(lval v)
             if (v.err == LERR_DIV_ZERO)
                 print_error("Division by zero!");
             if (v.err == LERR_BAD_OP)
-                print_error("Invalid operator!");
+                print_error("Invalid symbol!");
             if (v.err == LERR_BAD_NUM)
                 print_error("Invalud number!");
             break;
@@ -95,7 +157,7 @@ void lval_println(lval v)
     putchar('\n');
 }
 
-/* Use operator string to see which operation to perform, perform it. */
+/* Use symbol string to see which operation to perform, perform it. */
 lval eval_op(lval x, char *op, lval y)
 {
     /* if either value is an error, return it */
@@ -124,7 +186,7 @@ lval eval(mpc_ast_t *t)
         return errno != ERANGE ? lval_num(x): lval_err(LERR_BAD_NUM);
     }
 
-    /* The operator is always second child (first is '(') */
+    /* The symbol is always second child (first is '(') */
     char *op = t->children[1]->contents;
 
     /* We store the third child in x */
@@ -142,20 +204,22 @@ lval eval(mpc_ast_t *t)
 int main(int argc, char *argv[])
 {
     /* Create some parsers */
-    mpc_parser_t *Number = mpc_new("number");
-    mpc_parser_t *Operator = mpc_new("operator");
-    mpc_parser_t *Expr = mpc_new("expr");
-    mpc_parser_t *Caballa = mpc_new("caballa");
+    mpc_parser_t *Number  =     mpc_new("number");
+    mpc_parser_t *Symbol  =     mpc_new("symbol");
+    mpc_parser_t *Expr    =     mpc_new("expr");
+    mpc_parser_t *Sexpr   =     mpc_new("sexpr");
+    mpc_parser_t *Caballa =     mpc_new("caballa");
 
     /* Define them with the following language */
     mpca_lang(MPCA_LANG_DEFAULT,
-            "                                                               \
-            number      :     /-?[0-9]+/ ;                                  \
-            operator    :   '+' | '-' | '*' | '/' | '%' ;                   \
-            expr        :       <number> | '(' <operator> <expr>+ ')' ;     \
-            caballa     :    /^/ <operator> <expr>+ /$/ ;                   \
+            "                                           \
+            number      :   /-?[0-9]+/ ;                \
+            symbol      : '+' | '-' | '*' | '/' | '%' ; \
+            sexpr       : '(' <expr>* ')' ;             \
+            expr        : <number> | <symbol> <sexpr> ; \
+            caballa     :  /^/ <expr>* /$/ ;            \
             ",
-            Number, Operator, Expr, Caballa);
+            Number, Symbol, Sexpr, Expr, Caballa);
     /* Print version and Exit information */
     puts("Caballa Version 0.0.0.0.1");
     puts("Press Ctrl+c to Exit\n");
@@ -183,6 +247,6 @@ int main(int argc, char *argv[])
         free(input);
     }
     puts("bye!");
-    mpc_cleanup(4, Number, Operator, Expr, Caballa);
+    mpc_cleanup(4, Number, Symbol, Sexpr, Expr, Caballa);
     return 0;
 }
