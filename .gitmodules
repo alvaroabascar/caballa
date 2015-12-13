@@ -1,0 +1,3 @@
+[submodule "libs/mpc"]
+	path = libs/mpc
+	url = ssh://git@github.com/orangeduck/mpc
