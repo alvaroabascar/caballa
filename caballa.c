@@ -155,8 +155,9 @@ lval* lval_read(mpc_ast_t *t)
             (strcmp(t->children[i]->contents, "}") == 0) ||
             (strcmp(t->children[i]->contents, "{") == 0) ||
             (strcmp(t->children[i]->tag, "regex") == 0)) {
-            x = lval_add(x, lval_read(t->children[i]));
+            continue;
         }
+        x = lval_add(x, lval_read(t->children[i]));
     }
     return x;
 }
@@ -165,6 +166,7 @@ lval* lval_add(lval *v, lval *x)
 {
     v->count++;
     v->cell = realloc(v->cell, sizeof(lval*) * v->count);
+    v->cell[v->count - 1] = x;
     return v;
 }
 
@@ -194,7 +196,7 @@ void lval_print(lval *v)
 {
     switch(v->type) {
         case LVAL_NUM:
-            printf("%li\n", v->num);
+            printf("%li", v->num);
             break;
         case LVAL_ERR:
             printf("Error: %s", v->err);
@@ -264,18 +266,18 @@ int main(int argc, char *argv[])
     /* Create some parsers */
     mpc_parser_t *Number  =     mpc_new("number");
     mpc_parser_t *Symbol  =     mpc_new("symbol");
-    mpc_parser_t *Expr    =     mpc_new("expr");
     mpc_parser_t *Sexpr   =     mpc_new("sexpr");
+    mpc_parser_t *Expr    =     mpc_new("expr");
     mpc_parser_t *Caballa =     mpc_new("caballa");
 
     /* Define them with the following language */
     mpca_lang(MPCA_LANG_DEFAULT,
-            "                                           \
-            number      :   /-?[0-9]+/ ;                \
-            symbol      : '+' | '-' | '*' | '/' | '%' ; \
-            sexpr       : '(' <expr>* ')' ;             \
-            expr        : <number> | <symbol> <sexpr> ; \
-            caballa     :  /^/ <expr>* /$/ ;            \
+            "                                             \
+            number      : /-?[0-9]+/ ;                    \
+            symbol      : '+' | '-' | '*' | '/' | '%' ;   \
+            sexpr       : '(' <expr>* ')' ;               \
+            expr        : <number> | <symbol> | <sexpr> ; \
+            caballa     : /^/ <expr>* /$/ ;               \
             ",
             Number, Symbol, Sexpr, Expr, Caballa);
     /* Print version and Exit information */
@@ -306,7 +308,6 @@ int main(int argc, char *argv[])
 
         free(input);
     }
-    puts("bye!");
-    mpc_cleanup(4, Number, Symbol, Sexpr, Expr, Caballa);
+    mpc_cleanup(5, Number, Symbol, Sexpr, Expr, Caballa);
     return 0;
 }
