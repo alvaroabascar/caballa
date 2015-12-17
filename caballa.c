@@ -40,16 +40,17 @@ typedef struct lval {
     long num;
     /* Error and symbol types have some string data */
     char *err;
+    /* sym is a string identifying the lval (when it's a symbol) */
     char *sym;
     /* Count and pointer to a list of "lval*" */
     int count;
+    /* Cell is a pointer to an array of cells */
     struct lval **cell;
 } lval;
 
 /* Prototypes */
 void lval_print(lval *v);
 lval* lval_add(lval *v, lval *x);
-
 
 /* possible lval types
  * LVAL_ERR: an error
@@ -100,13 +101,13 @@ lval* lval_sexpr(void)
     return v;
 }
 
+/* delete a lval and it's children (if it's a S-Expression) */
 void lval_del(lval *v)
 {
     switch (v->type) {
         /* Do nothing special for number type. */
         case LVAL_NUM:
             break;
-
         /* For Err or Sym free the string data. */
         case LVAL_ERR:
             free(v->err);
@@ -159,24 +160,30 @@ lval* lval_read(mpc_ast_t *t)
         }
         x = lval_add(x, lval_read(t->children[i]));
     }
+
     return x;
 }
 
+/* Given two lvals, "v" and "x", adds "x" to the list of children of "v" */
 lval* lval_add(lval *v, lval *x)
 {
+    /* Increment the count of children */
     v->count++;
+    /* Increment accordingly the space allocated for the cells */
     v->cell = realloc(v->cell, sizeof(lval*) * v->count);
+    /* Add the lval as the last children */
     v->cell[v->count - 1] = x;
     return v;
 }
-
-
 
 void print_error(char *msg)
 {
     printf("Error: %s\n", msg);
 }
 
+/* Print a lvalue (with all it's children) between chars open and close
+ * (usually '(' and ')')
+ */
 void lval_expr_print(lval *v, char open, char close)
 {
     putchar(open);
@@ -191,7 +198,7 @@ void lval_expr_print(lval *v, char open, char close)
     putchar(close);
 }
 
-
+/* Handle different representations depending on the type of lval. */
 void lval_print(lval *v)
 {
     switch(v->type) {
@@ -210,7 +217,7 @@ void lval_print(lval *v)
     }
 }
 
-/* print a lval followed by a newline */
+/* Print a lval followed by a newline. */
 void lval_println(lval *v)
 {
     lval_print(v);
@@ -236,20 +243,20 @@ lval *eval_op(lval *x, char *op, lval *y)
     return lval_err("invalid number");
 }
 
-/* Evaluate the Abstract Syntax Tree */
+/* Evaluate the Abstract Syntax Tree. */
 lval* eval(mpc_ast_t *t)
 {
-    /* If it is a number return it */
+    /* If it is a number return it. */
     if (strstr(t->tag, "number")) {
         errno = 0;
         long x = strtol(t->contents, NULL, 10);
         return errno != ERANGE ? lval_num(x): lval_err("invalid number");
     }
 
-    /* The symbol is always second child (first is '(') */
+    /* The symbol is always second child (first is '('). */
     char *op = t->children[1]->contents;
 
-    /* We store the third child in x */
+    /* We store the third child in x. */
     lval *x = eval(t->children[2]);
 
     /* Iterate the remaining children and combining. */
@@ -263,14 +270,14 @@ lval* eval(mpc_ast_t *t)
 
 int main(int argc, char *argv[])
 {
-    /* Create some parsers */
+    /* Create some parsers. */
     mpc_parser_t *Number  =     mpc_new("number");
     mpc_parser_t *Symbol  =     mpc_new("symbol");
     mpc_parser_t *Sexpr   =     mpc_new("sexpr");
     mpc_parser_t *Expr    =     mpc_new("expr");
     mpc_parser_t *Caballa =     mpc_new("caballa");
 
-    /* Define them with the following language */
+    /* Define them with the following language. */
     mpca_lang(MPCA_LANG_DEFAULT,
             "                                             \
             number      : /-?[0-9]+/ ;                    \
@@ -280,28 +287,28 @@ int main(int argc, char *argv[])
             caballa     : /^/ <expr>* /$/ ;               \
             ",
             Number, Symbol, Sexpr, Expr, Caballa);
-    /* Print version and Exit information */
+    /* Print version and Exit information. */
     puts("Caballa Version 0.0.0.0.1");
     puts("Press Ctrl+c to Exit\n");
 
     mpc_result_t r;
     lval *x;
-    /* Main loop */
+    /* Main loop. */
     while (1) {
-        /* Output our prompt and get input */
+        /* Output our prompt and get input. */
         char *input = readline("caballa> ");
 
-        /* Add input to history */
+        /* Add input to history. */
         add_history(input);
 
-        /* Attempt to parse the user input */
+        /* Attempt to parse the user input. */
         if (mpc_parse("<stdin>", input, Caballa, &r)) {
-            /* On success print the result of evaluation */
+            /* On success print the result of evaluation. */
             x = lval_read(r.output);
             lval_println(x);
             lval_del(x);
         } else {
-            /* Otherwise print the error */
+            /* Otherwise print the error. */
             mpc_err_print(r.error);
             mpc_err_delete(r.error);
         }
