@@ -6,7 +6,7 @@
 /* Macros */
 #define min(a, b) ((a > b) ? b : a)
 #define max(a, b) ((a < b) ? b : a)
-#define streq(a, b) (strcmp(a, b) == 0)
+#define STREQ(a, b) (strcmp(a, b) == 0)
 
 /* *********** WINDOWS SHIT *********** */
 
@@ -165,7 +165,7 @@ lval* lval_read(mpc_ast_t *t)
 
     /* If root (>) or sexpr then create empty list */
     lval *x = NULL;
-    if (streq(t->tag, ">") ||
+    if (STREQ(t->tag, ">") ||
         strstr(t->tag, "sexpr")) {
         x = lval_sexpr();
     }
@@ -176,11 +176,11 @@ lval* lval_read(mpc_ast_t *t)
 
     /* Fill this list with any valid expression contained within */
     for (int i = 0; i < t->children_num; i++) {
-        if (streq(t->children[i]->contents, "(") ||
-            streq(t->children[i]->contents, ")") ||
-            streq(t->children[i]->contents, "}") ||
-            streq(t->children[i]->contents, "{") ||
-            streq(t->children[i]->tag, "regex")) {
+        if (STREQ(t->children[i]->contents, "(") ||
+            STREQ(t->children[i]->contents, ")") ||
+            STREQ(t->children[i]->contents, "}") ||
+            STREQ(t->children[i]->contents, "{") ||
+            STREQ(t->children[i]->tag, "regex")) {
             continue;
         }
         lval_add(x, lval_read(t->children[i]));
@@ -344,7 +344,7 @@ lval* builtin_op(lval *a, char *op)
     lval *x = lval_pop(a, 0);
 
     /* If no arguments and sub then perform unary negation. */
-    if (streq(op, "-") && a->count == 0) {
+    if (STREQ(op, "-") && a->count == 0) {
         x->num = - x->num;
     }
 
@@ -353,10 +353,10 @@ lval* builtin_op(lval *a, char *op)
         /* Pop the next element. */
         lval *y = lval_pop(a, 0);
 
-        if (streq(op, "+")) { x->num += y->num; }
-        if (streq(op, "-")) { x->num -= y->num; }
-        if (streq(op, "*")) { x->num *= y->num; }
-        if (streq(op, "/")) {
+        if (STREQ(op, "+")) { x->num += y->num; }
+        if (STREQ(op, "-")) { x->num -= y->num; }
+        if (STREQ(op, "*")) { x->num *= y->num; }
+        if (STREQ(op, "/")) {
             /* Ensure we're not dividing by zero. */
             if (y->num == 0) {
                 lval_del(x);
