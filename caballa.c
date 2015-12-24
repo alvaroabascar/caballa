@@ -152,7 +152,7 @@ lval* lval_read(mpc_ast_t *t)
     /* If root (>) or sexpr then create empty list */
     lval *x = NULL;
     if (streq(t->tag, ">") ||
-        (strstr(t->tag, "sexpr"))) {
+        strstr(t->tag, "sexpr")) {
         x = lval_sexpr();
     }
 
@@ -165,13 +165,14 @@ lval* lval_read(mpc_ast_t *t)
             streq(t->children[i]->tag, "regex")) {
             continue;
         }
-        x = lval_add(x, lval_read(t->children[i]));
+        lval_add(x, lval_read(t->children[i]));
     }
 
     return x;
 }
 
-/* Given two lvals, "v" and "x", adds "x" to the list of children of "v" */
+/* Given two lvals, "v" and "x", adds "x" to the list of children of "v".
+ * Returns v. */
 lval* lval_add(lval *v, lval *x)
 {
     /* Increment the count of children */
@@ -234,7 +235,7 @@ void lval_println(lval *v)
 /* Evaluate a S-Expression */
 lval* lval_eval_sexpr(lval *v)
 {
-    /* Evaluate children */
+    /* Evaluate children. */
     int i;
     for (i = 0; i < v->count; i++) {
         v->cell[i] = lval_eval(v->cell[i]);
@@ -242,6 +243,7 @@ lval* lval_eval_sexpr(lval *v)
 
     /* Error checking */
     for (i = 0; i < v->count; i++) {
+        /* If any children is an error, return it and destroy "v". */
         if (v->cell[i]->type == LVAL_ERR) {
             return lval_take(v, i);
         }
@@ -252,7 +254,7 @@ lval* lval_eval_sexpr(lval *v)
         return v;
     }
 
-    /* Single expression */
+    /* Single expression: return first children, destroy sexpr. */
     if (v->count == 1) {
         return lval_take(v, 0);
     }
@@ -262,10 +264,10 @@ lval* lval_eval_sexpr(lval *v)
     if (f->type != LVAL_SYM) {
         lval_del(f);
         lval_del(v);
-        return lval_err("S-expression does not start with  symbol!");
+        return lval_err("S-expression must start with a symbol.");
     }
 
-    /* Call builtin with operator */
+    /* Call builtin_op with operator. Delete f. */
     lval *result = builtin_op(v, f->sym);
     lval_del(f);
     return result;
@@ -334,6 +336,7 @@ lval* builtin_op(lval *a, char *op)
         if (streq(op, "-")) { x->num -= y->num; }
         if (streq(op, "*")) { x->num *= y->num; }
         if (streq(op, "/")) {
+            /* Ensure we're not dividing by zero. */
             if (y->num == 0) {
                 lval_del(x);
                 lval_del(y);
