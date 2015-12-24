@@ -55,7 +55,14 @@ typedef struct lval {
 /***** Prototypes *****/
 void lval_print(lval *v);
 lval* lval_add(lval *v, lval *x);
+lval* builtin_eval(lval *a);
 lval* builtin_op(lval *a, char *op);
+lval* builtin(lval *a, char *func);
+lval* builtin_list(lval *a);
+lval* builtin_head(lval *a);
+lval* builtin_tail(lval *a);
+lval* builtin_join(lval *a);
+lval* lval_join(lval *x, lval *y);
 lval* lval_eval(lval *v);
 lval* lval_take(lval *v, int i);
 lval* lval_pop(lval *v, int i);
@@ -290,8 +297,8 @@ lval* lval_eval_sexpr(lval *v)
         return lval_err("S-expression must start with a symbol.");
     }
 
-    /* Call builtin_op with operator. Delete f. */
-    lval *result = builtin_op(v, f->sym);
+    /* Call builtin with operator. Delete f. */
+    lval *result = builtin(v, f->sym);
     lval_del(f);
     return result;
 }
@@ -329,6 +336,18 @@ lval* lval_eval(lval *v)
     }
     /* All other lval types remain the same. */
     return v;
+}
+
+lval* builtin(lval *a, char *func)
+{
+    if (STREQ("list", func)) { return builtin_list(a); }
+    if (STREQ("head", func)) { return builtin_head(a); }
+    if (STREQ("tail", func)) { return builtin_tail(a); }
+    if (STREQ("join", func)) { return builtin_join(a); }
+    if (STREQ("eval", func)) { return builtin_eval(a); }
+    if (strstr("+-/*", func)) { return builtin_op(a, func); }
+    lval_del(a);
+    return lval_err("Unknown function.");
 }
 
 lval* builtin_op(lval *a, char *op)
@@ -411,6 +430,57 @@ lval* builtin_tail(lval *a)
     /* Delete first element and return. */
     lval_del(lval_pop(v, 0));
     return v;
+}
+
+/* Turn an S-Expression into a Q-Expression. */
+lval* builtin_list(lval *a)
+{
+    a->type = LVAL_QEXPR;
+    return a;
+}
+
+/* Join two Q-Expressions. */
+lval* builtin_join(lval *a)
+{
+    int i;
+    for (i = 0; i < a->count; i++) {
+        LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
+                "Function 'join' passedincorrect type.");
+    }
+
+    lval *x = lval_pop(a, 0);
+
+    while (a->count) {
+        x = lval_join(x, lval_pop(a, 0));
+    }
+
+    lval_del(a);
+    return x;
+}
+
+/* Join two lvalues. */
+lval* lval_join(lval *x, lval *y)
+{
+    while (y->count) {
+        lval_add(x, lval_pop(y, 0));
+    }
+
+    /* Delete the empty 'y' and return 'x'. */
+    lval_del(y);
+    return x;
+}
+
+/* Evaluate a S-Expression. */
+lval* builtin_eval(lval *a)
+{
+    LASSERT(a, a->count == 1,
+            "Function 'eval' passed too many arguments.");
+    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+            "Function 'eval' passed too incorrect type.");
+
+    lval *x = lval_take(a, 0);
+    x->type = LVAL_SEXPR;
+    return lval_eval(x);
 }
 
 int main(int argc, char *argv[])
