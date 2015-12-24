@@ -7,6 +7,8 @@
 #define min(a, b) ((a > b) ? b : a)
 #define max(a, b) ((a < b) ? b : a)
 #define STREQ(a, b) (strcmp(a, b) == 0)
+#define LASSERT(args, cond, err) \
+    if (!(cond)) { lval_del(args); return lval_err(err); }
 
 /* *********** WINDOWS SHIT *********** */
 
@@ -376,18 +378,13 @@ lval* builtin_op(lval *a, char *op)
 lval* builtin_head(lval *a)
 {
     /* Check error conditions. */
-    if (a->count != 1) {
-        lval_del(a);
-        return lval_err("Function 'head' passed too many arguments.");
-    }
-    if (a->cell[0]->type != LVAL_QEXPR) {
-        lval_del(a);
-        return lval_err("Function 'head' passed incorrect types.");
-    }
-    if (a->cell[0]->count == 0) {
-        lval_del(a);
-        return lval_err("Function 'head' passed {}.");
-    }
+    LASSERT(a, a->count == 1,
+            "Function 'head' passed too many arguments.");
+    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+            "Function 'head' passed incorrect type.");
+    LASSERT(a, a->cell[0]->count != 0,
+            "Function 'head' passed {}.");
+
     /* Otherwise take first argument. */
     lval *v = lval_take(a, 0);
 
@@ -401,18 +398,12 @@ lval* builtin_head(lval *a)
 lval* builtin_tail(lval *a)
 {
     /* Check error conditions. */
-    if (a->count != 1) {
-        lval_del(a);
-        return lval_err("Function 'tail' passed too many arguments.");
-    }
-    if (a->cell[0]->type != LVAL_QEXPR) {
-        lval_del(a);
-        return lval_err("Function 'tail' passed incorrect types.");
-    }
-    if (a->cell[0]->count == 0) {
-        lval_del(a);
-        return lval_err("Function 'tail' passed {}.");
-    }
+    LASSERT(a, a->count == 1,
+            "Function 'head' passed too many arguments.");
+    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+            "Function 'head' passed incorrect type.");
+    LASSERT(a, a->cell[0]->count != 0,
+            "Function 'head' passed {}.");
 
     /* Take first argument. */
     lval *v = lval_take(a, 0);
