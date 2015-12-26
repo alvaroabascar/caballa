@@ -57,7 +57,7 @@ typedef lval*(*lbuiltin)(lenv *, lval *);
  * LVAL_QEXPR: a quoted expression (Q-Expression) = a "literal list".
  * LVAL_FUN: a function.
  */
-enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN };
+enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN, LVAL_DEF };
 
 /* Struct to hold the result of an evaluation. */
 struct lval {
@@ -492,10 +492,19 @@ lval *lenv_get(lenv *e, lval *k)
         }
     }
     /* If no symbol found return error. */
-    return lval_err("unbound symbol.");
+    char *template = "unbound symbol: '%s'";
+    char *msg = malloc(sizeof(char)*(strlen(template) + strlen(k->sym)));
+    sprintf(msg, "unbound symbol: '%s'", k->sym);
+    lval *error = lval_err(msg);
+    free(msg);
+    return error;
 }
 
-/* Put a lval inside an environment. */
+/* Put a lval inside an environment:
+ * e -> environment
+ * k -> symbol
+ * v-> value
+ */
 void lenv_put(lenv *e, lval *k, lval *v)
 {
     /* Iterate over all items in environment. */
@@ -524,7 +533,37 @@ void lenv_put(lenv *e, lval *k, lval *v)
 
 /******************** Builtin functions. *************************/
 
-lval* builtin_op(lenv *e, lval *a, char *op)
+lval *builtin_def(lenv *e, lval *a, char *op)
+{
+    lval *sym, *qexpr, *val;
+    LASSERT(a, (a->count >= 2),
+            "'def' must have at least two arguments: a quoted expression"
+            " and an expression");
+    
+    qexpr = lval_pop(a, 0);
+    LASSERT(a, (qexpr->type = LVAL_QEXPR),
+            "first argument of 'def' must be a quoted expression");
+    LASSERT(a, (qexpr->count > 0),
+            "first argument of 'def' cannot be empty {}");
+    LASSERT(a, (qexpr->count == a->count),
+            "number of symbols in qexpr must match the number of values");
+    int i;
+    for (i = 0; i < qexpr->count; i++) {
+        LASSERT(qexpr, (qexpr->cell[i]->type == LVAL_SYM),
+                "all values in the quoted expression must be symbols.");
+    }
+    /* Add all the symbols to the environment. */
+    while (a->count > 0) {
+        sym = lval_pop(qexpr, 0);
+        val = lval_pop(a, 0);
+        lenv_put(e, sym, lval_eval(e, val));
+        lval_del(sym);
+        lval_del(val);
+    }
+    return lval_sexpr();
+}
+
+lval *builtin_op(lenv *e, lval *a, char *op)
 {
     /* Ensure all arguments are numbers. */
     int i;
@@ -686,18 +725,21 @@ void lenv_add_builtins(lenv *e)
     lenv_add_builtin(e, "-", (lbuiltin)builtin_sub);
     lenv_add_builtin(e, "*", (lbuiltin)builtin_mul);
     lenv_add_builtin(e, "/", (lbuiltin)builtin_div);
+
+    /* Variable handling functions */
+    lenv_add_builtin(e, "def", (lbuiltin)builtin_def);
 }
 
 /*************************************************************/
 int main(int argc, char *argv[])
 {
     /* Create some parsers. */
-    mpc_parser_t *Number  =     mpc_new("number");
-    mpc_parser_t *Symbol  =     mpc_new("symbol");
-    mpc_parser_t *Sexpr   =     mpc_new("sexpr");
-    mpc_parser_t *Qexpr   =     mpc_new("qexpr");
-    mpc_parser_t *Expr    =     mpc_new("expr");
-    mpc_parser_t *Caballa =     mpc_new("caballa");
+    mpc_parser_t *Number       =     mpc_new("number");
+    mpc_parser_t *Symbol       =     mpc_new("symbol");
+    mpc_parser_t *Sexpr        =     mpc_new("sexpr");
+    mpc_parser_t *Qexpr        =     mpc_new("qexpr");
+    mpc_parser_t *Expr         =     mpc_new("expr");
+    mpc_parser_t *Caballa      =     mpc_new("caballa");
 
     /* Define them with the following language. */
     mpca_lang(MPCA_LANG_DEFAULT,
@@ -721,10 +763,11 @@ int main(int argc, char *argv[])
     lenv *e = lenv_new();
     lenv_add_builtins(e);
 
+    char *input;
     /* Main loop. */
     while (1) {
         /* Output our prompt and get input. */
-        char *input = readline("caballa> ");
+        input = readline("caballa> ");
 
         /* Add input to history. */
         add_history(input);
