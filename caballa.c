@@ -42,6 +42,9 @@ struct lval;
 struct lenv;
 typedef struct lval lval;
 typedef struct lenv lenv;
+/* lbuiltin is a pointer to a function which takes an environment (lenv)
+ * and a lvalue (lval) and returns a lval.
+ */
 typedef lval*(*lbuiltin)(lenv *, lval *);
 
 /* possible lval types
@@ -51,10 +54,12 @@ typedef lval*(*lbuiltin)(lenv *, lval *);
  * LVAL_SEXPR: a symbolic expression (S-Expression). A S-Expression is a
  *             variable length list of other values.
  *             (http://www.buildyourownlisp.com/chapter9_s_expressions)
+ * LVAL_QEXPR: a quoted expression (Q-Expression) = a "literal list".
+ * LVAL_FUN: a function.
  */
 enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN };
 
-/* struct to hold the result of an evaluation */
+/* Struct to hold the result of an evaluation. */
 struct lval {
     int type;
     long num;
@@ -62,6 +67,7 @@ struct lval {
     char *err;
     /* sym is a string identifying the lval (when it's a symbol or function) */
     char *sym;
+    /* fun is a pointer to a function. */
     lbuiltin fun;
     /* Count and pointer to a list of "lval*" */
     int count;
@@ -69,6 +75,7 @@ struct lval {
     struct lval **cell;
 };
 
+/* Struct to represent an environment (set of symbols and associated values.) */
 struct lenv {
     int count;
     char **syms;
@@ -91,6 +98,7 @@ lval *lval_take(lval *v, int i);
 lval *lval_pop(lval *v, int i);
 void lval_del(lval *v);
 lval *lval_copy(lval *v);
+lval *lenv_get(lenv *e, lval *v);
 /**********************/
 
 /******** Functions to create different types of lvals. *********/
@@ -154,73 +162,7 @@ lval *lval_fun(lbuiltin func)
 }
 
 /*****************************************************************/
-
-/* Create an environment:
- * count = number of variables.
- * syms = symbols
- * vals = values, in order.
- */
-lenv *lenv_new(void)
-{
-    lenv *e = malloc(sizeof(lenv));
-    e->count = 0;
-    e->syms = NULL;
-    e->vals = NULL;
-    return e;
-}
-
-/* Remove an environment with all its content. */
-void lenv_del(lenv *e)
-{
-    int i;
-    for (i = 0; i < e->count; i++) {
-        free(e->syms[i]);
-        lval_del(e->vals[i]);
-    }
-    free(e->syms);
-    free(e->vals);
-    free(e);
-}
-
-/* Get a lval from environment. */
-lval *lenv_get(lenv *e, lval *k)
-{
-    /* Iterate over all items in environment. */
-    int i;
-    for (i = 0; i < e->count; i++) {
-        /* Check if the stored string matches the symbol string. */
-        if (STREQ(e->syms[i], k->sym)) {
-            return lval_copy(e->vals[i]);
-        }
-    }
-    /* If no symbol found return error. */
-    return lval_err("unbound symbol.");
-}
-
-/* Put a lval inside an environment. */
-void lenv_put(lenv *e, lval *k, lval *v)
-{
-    /* Iterate over all items in environment. */
-    int i;
-    for (i = 0; i < e->count; i++) {
-        /* If variable is found delete item at that position. */
-        if (STREQ(e->syms[i], k->sym)) {
-            lval_del(e->vals[i]);
-            e->vals[i] = lval_copy(v);
-            return;
-        }
-    }
-
-    /* If no existing entry found allocate space for new entry. */
-    e->count++;
-    e->vals = realloc(e->vals, sizeof(lval *) * e->count);
-    e->syms = realloc(e->syms, sizeof(char *) * e->count);
-
-    /* Copy contents of lval and symbol string into new location. */
-    e->vals[e->count-1] = lval_copy(v);
-    e->syms[e->count-1] = malloc(strlen(k->sym) + 1);
-    strcpy(e->syms[e->count-1], k->sym);
-}
+/****************** Functions to handle lvals. ******************/
 
 /* delete a lval and it's children (if it's a S-Expression) */
 void lval_del(lval *v)
@@ -288,6 +230,57 @@ lval *lval_copy(lval *v)
     return x;
 }
 
+/* Given two lvals, "v" and "x", adds "x" to the list of children of "v".
+ * Returns v. */
+lval* lval_add(lval *v, lval *x)
+{
+    /* Increment the count of children */
+    v->count++;
+    /* Increment accordingly the space allocated for the cells */
+    v->cell = realloc(v->cell, sizeof(lval*) * v->count);
+    /* Add the lval as the last children */
+    v->cell[v->count - 1] = x;
+    return v;
+}
+
+/* Join two lvalues. */
+lval* lval_join(lenv *e, lval *x, lval *y)
+{
+    while (y->count) {
+        lval_add(x, lval_pop(y, 0));
+    }
+
+    /* Delete the empty 'y' and return 'x'. */
+    lval_del(y);
+    return x;
+}
+
+/* Returns the ith lval of sepxr "v", removing it from "v" */
+lval* lval_pop(lval *v, int i)
+{
+    /* Find the item at "i". */
+    lval *x = v->cell[i];
+
+    /* Shift memory after the item at "i" over the top. */
+    memmove(&v->cell[i], &v->cell[i+1], sizeof(lval*)*(v->count - i - 1));
+
+    /* Decrease the count of items in the list. */
+    v->count--;
+
+    /* Reallocate the memory used. */
+    v->cell = realloc(v->cell, sizeof(lval*) * v->count);
+    return x;
+}
+
+/* Returns the ith lval of sexpr "v", destroying "v". */
+lval* lval_take(lval *v, int i)
+{
+    lval *x = lval_pop(v, i);
+    lval_del(v);
+    return x;
+}
+
+
 lval* lval_read_num(mpc_ast_t *t)
 {
     errno = 0;
@@ -327,19 +320,8 @@ lval* lval_read(mpc_ast_t *t)
     return x;
 }
 
-/* Given two lvals, "v" and "x", adds "x" to the list of children of "v".
- * Returns v. */
-lval* lval_add(lval *v, lval *x)
-{
-    /* Increment the count of children */
-    v->count++;
-    /* Increment accordingly the space allocated for the cells */
-    v->cell = realloc(v->cell, sizeof(lval*) * v->count);
-    /* Add the lval as the last children */
-    v->cell[v->count - 1] = x;
-    return v;
-}
-
+/*****************************************************************/
+/******************* Functions to print lvals ********************/
 void print_error(char *msg)
 {
     printf("Error: %s\n", msg);
@@ -393,6 +375,8 @@ void lval_println(lval *v)
     lval_print(v);
     putchar('\n');
 }
+/*****************************************************************/
+/****************** Functions for evaluation. ********************/
 
 /* Evaluate a S-Expression */
 lval* lval_eval_sexpr(lenv *e, lval *v)
@@ -435,31 +419,6 @@ lval* lval_eval_sexpr(lenv *e, lval *v)
     return result;
 }
 
-/* Returns the ith lval of sepxr "v", removing it from "v" */
-lval* lval_pop(lval *v, int i)
-{
-    /* Find the item at "i". */
-    lval *x = v->cell[i];
-
-    /* Shift memory after the item at "i" over the top. */
-    memmove(&v->cell[i], &v->cell[i+1], sizeof(lval*)*(v->count - i - 1));
-
-    /* Decrease the count of items in the list. */
-    v->count--;
-
-    /* Reallocate the memory used. */
-    v->cell = realloc(v->cell, sizeof(lval*) * v->count);
-    return x;
-}
-
-/* Returns the ith lval of sexpr "v", destroying "v". */
-lval* lval_take(lval *v, int i)
-{
-    lval *x = lval_pop(v, i);
-    lval_del(v);
-    return x;
-}
-
 lval* lval_eval(lenv *e, lval *v)
 {
     /* Evaluate S-Expressions */
@@ -475,6 +434,95 @@ lval* lval_eval(lenv *e, lval *v)
     return v;
 }
 
+/* Evaluate a S-Expression. */
+lval *builtin_eval(lenv *e, lval *a)
+{
+    LASSERT(a, a->count == 1,
+            "Function 'eval' passed too many arguments.");
+    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+            "Function 'eval' passed too incorrect type.");
+
+    lval *x = lval_take(a, 0);
+    x->type = LVAL_SEXPR;
+    return lval_eval(e, x);
+}
+
+
+
+/*****************************************************************/
+
+
+/************** Functions to handle environments. ****************/
+/* Create an environment:
+ * count = number of variables.
+ * syms = symbols
+ * vals = values, in order.
+ */
+lenv *lenv_new(void)
+{
+    lenv *e = malloc(sizeof(lenv));
+    e->count = 0;
+    e->syms = NULL;
+    e->vals = NULL;
+    return e;
+}
+
+/* Remove an environment with all its content. */
+void lenv_del(lenv *e)
+{
+    int i;
+    for (i = 0; i < e->count; i++) {
+        free(e->syms[i]);
+        lval_del(e->vals[i]);
+    }
+    free(e->syms);
+    free(e->vals);
+    free(e);
+}
+
+/* Get a lval from environment. */
+lval *lenv_get(lenv *e, lval *k)
+{
+    /* Iterate over all items in environment. */
+    int i;
+    for (i = 0; i < e->count; i++) {
+        /* Check if the stored string matches the symbol string. */
+        if (STREQ(e->syms[i], k->sym)) {
+            return lval_copy(e->vals[i]);
+        }
+    }
+    /* If no symbol found return error. */
+    return lval_err("unbound symbol.");
+}
+
+/* Put a lval inside an environment. */
+void lenv_put(lenv *e, lval *k, lval *v)
+{
+    /* Iterate over all items in environment. */
+    int i;
+    for (i = 0; i < e->count; i++) {
+        /* If variable is found delete item at that position. */
+        if (STREQ(e->syms[i], k->sym)) {
+            lval_del(e->vals[i]);
+            e->vals[i] = lval_copy(v);
+            return;
+        }
+    }
+
+    /* If no existing entry found allocate space for new entry. */
+    e->count++;
+    e->vals = realloc(e->vals, sizeof(lval *) * e->count);
+    e->syms = realloc(e->syms, sizeof(char *) * e->count);
+
+    /* Copy contents of lval and symbol string into new location. */
+    e->vals[e->count-1] = lval_copy(v);
+    e->syms[e->count-1] = malloc(strlen(k->sym) + 1);
+    strcpy(e->syms[e->count-1], k->sym);
+}
+
+/*****************************************************************/
+
+/******************** Builtin functions. *************************/
 
 lval* builtin_op(lenv *e, lval *a, char *op)
 {
@@ -520,7 +568,6 @@ lval* builtin_op(lenv *e, lval *a, char *op)
     return x;
 }
 
-/*********** Builtin functions. ***********/
 
 lval *builtin_add(lenv *e, lval *a)
 {
@@ -541,8 +588,6 @@ lval *builtin_div(lenv *e, lval *a)
 {
     return builtin_op(e, a, "/");
 }
-
-/******************************************/
 
 lval* builtin_head(lenv *e, lval *a)
 {
@@ -614,31 +659,6 @@ lval *builtin_quit(lenv *e, lval *a)
     LASSERT(a, a->count == 0, "Function 'quit' should receive no arguments.");
     return lval_num(23);
     exit(0);
-}
-
-/* Join two lvalues. */
-lval* lval_join(lenv *e, lval *x, lval *y)
-{
-    while (y->count) {
-        lval_add(x, lval_pop(y, 0));
-    }
-
-    /* Delete the empty 'y' and return 'x'. */
-    lval_del(y);
-    return x;
-}
-
-/* Evaluate a S-Expression. */
-lval *builtin_eval(lenv *e, lval *a)
-{
-    LASSERT(a, a->count == 1,
-            "Function 'eval' passed too many arguments.");
-    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-            "Function 'eval' passed too incorrect type.");
-
-    lval *x = lval_take(a, 0);
-    x->type = LVAL_SEXPR;
-    return lval_eval(e, x);
 }
 
 /*************** Functions to handle builtins ****************/
