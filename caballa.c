@@ -80,13 +80,12 @@ void lval_print(lval *v);
 lval *lval_add(lval *v, lval *x);
 lval *builtin_eval(lenv *e, lval *a);
 lval *builtin_op(lenv *e, lval *a, char *op);
-lval *builtin(lval *a, char *func);
-lval *builtin_list(lval *a);
-lval *builtin_head(lval *a);
-lval *builtin_tail(lval *a);
-lval *builtin_join(lval *a);
-lval *builtin_quit(lval *a);
-lval *lval_join(lval *x, lval *y);
+lval *builtin_list(lenv *e, lval *a);
+lval *builtin_head(lenv *e, lval *a);
+lval *builtin_tail(lenv *e, lval *a);
+lval *builtin_join(lenv *e, lval *a);
+lval *builtin_quit(lenv *e, lval *a);
+lval *lval_join(lenv *e, lval *x, lval *y);
 lval *lval_eval(lenv *e, lval *v);
 lval *lval_take(lval *v, int i);
 lval *lval_pop(lval *v, int i);
@@ -545,7 +544,7 @@ lval *builtin_div(lenv *e, lval *a)
 
 /******************************************/
 
-lval* builtin_head(lval *a)
+lval* builtin_head(lenv *e, lval *a)
 {
     /* Check error conditions. */
     LASSERT(a, a->count == 1,
@@ -565,7 +564,7 @@ lval* builtin_head(lval *a)
     return v;
 }
 
-lval* builtin_tail(lval *a)
+lval* builtin_tail(lenv *e, lval *a)
 {
     /* Check error conditions. */
     LASSERT(a, a->count == 1,
@@ -584,14 +583,14 @@ lval* builtin_tail(lval *a)
 }
 
 /* Turn an S-Expression into a Q-Expression. */
-lval* builtin_list(lval *a)
+lval* builtin_list(lenv *e, lval *a)
 {
     a->type = LVAL_QEXPR;
     return a;
 }
 
 /* Join two Q-Expressions. */
-lval* builtin_join(lval *a)
+lval* builtin_join(lenv *e, lval *a)
 {
     int i;
     for (i = 0; i < a->count; i++) {
@@ -602,7 +601,7 @@ lval* builtin_join(lval *a)
     lval *x = lval_pop(a, 0);
 
     while (a->count) {
-        x = lval_join(x, lval_pop(a, 0));
+        x = lval_join(e, x, lval_pop(a, 0));
     }
 
     lval_del(a);
@@ -610,7 +609,7 @@ lval* builtin_join(lval *a)
 }
 
 /* Exit from the program. */
-lval *builtin_quit(lval *a)
+lval *builtin_quit(lenv *e, lval *a)
 {
     LASSERT(a, a->count == 0, "Function 'quit' should receive no arguments.");
     return lval_num(23);
@@ -618,7 +617,7 @@ lval *builtin_quit(lval *a)
 }
 
 /* Join two lvalues. */
-lval* lval_join(lval *x, lval *y)
+lval* lval_join(lenv *e, lval *x, lval *y)
 {
     while (y->count) {
         lval_add(x, lval_pop(y, 0));
