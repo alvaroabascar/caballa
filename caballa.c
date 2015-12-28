@@ -114,12 +114,25 @@ lval* lval_num(long x)
 }
 
 /* Construct a pointer to a new Error lval. */
-lval* lval_err(char *m)
+lval* lval_err(char *fmt, ...)
 {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_ERR;
-    v->err = malloc(strlen(m) + 1);
-    strcpy(v->err, m);
+
+    /* Create and initialize va list. */
+    va_list va;
+    va_start(va, fmt);
+
+    /* Allocate 2048 bytes of space (max size of error). */
+    v->err = malloc(2048);
+    /* Fill error with the correct string. */
+    vsnprintf(v->err, 2047, fmt, va);
+   
+    /* Reallocate to number of bytes actually used. */
+    v->err = realloc(v->err, strlen(v->err) + 1);
+
+    /* Destroy va_list and return. */
+    va_end(va);
     return v;
 }
 
@@ -492,11 +505,7 @@ lval *lenv_get(lenv *e, lval *k)
         }
     }
     /* If no symbol found return error. */
-    char *template = "unbound symbol: '%s'";
-    char *msg = malloc(sizeof(char)*(strlen(template) + strlen(k->sym)));
-    sprintf(msg, "unbound symbol: '%s'", k->sym);
-    lval *error = lval_err(msg);
-    free(msg);
+    lval *error = lval_err("unbound symbol: '%s'", k->sym);
     return error;
 }
 
