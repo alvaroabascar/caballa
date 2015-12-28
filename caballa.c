@@ -58,6 +58,7 @@ typedef lval*(*lbuiltin)(lenv *, lval *);
  * LVAL_FUN: a function.
  */
 enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN, LVAL_DEF };
+/*         0         1         2          3          4          5         6     */
 
 /* Struct to hold the result of an evaluation. */
 struct lval {
@@ -217,8 +218,8 @@ lval *lval_copy(lval *v)
             break;
 
         /* Copy lists by copying each sub-expression. */
-        case LVAL_SEXPR:
         case LVAL_QEXPR:
+        case LVAL_SEXPR:
             x->count = v->count;
             x->cell = malloc(sizeof(lval *) * x->count);
             for (i = 0; i < x->count; i++) {
@@ -316,7 +317,6 @@ lval* lval_read(mpc_ast_t *t)
         }
         lval_add(x, lval_read(t->children[i]));
     }
-
     return x;
 }
 
@@ -560,6 +560,8 @@ lval *builtin_def(lenv *e, lval *a, char *op)
         lval_del(sym);
         lval_del(val);
     }
+    lval_del(a);
+    lval_del(qexpr);
     return lval_sexpr();
 }
 
@@ -774,7 +776,7 @@ int main(int argc, char *argv[])
 
         /* Attempt to parse the user input. */
         if (mpc_parse("<stdin>", input, Caballa, &r)) {
-            /* On success print the result of evaluation. */
+            /* On success print the result of evaluation */
             x = lval_eval(e, lval_read(r.output));
             lval_println(x);
             lval_del(x);
