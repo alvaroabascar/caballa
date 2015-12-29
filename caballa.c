@@ -220,14 +220,20 @@ lval *lval_copy(lval *v)
         case LVAL_FUN:
             x->fun = v->fun;
             break;
+
         case LVAL_NUM:
             x->num = v->num;
+            break;
+
+        case LVAL_SYM:
+            x->sym = malloc(strlen(v->sym) + 1);
+            strcpy(x->sym, v->sym);
             break;
 
         /* Copy strings using malloc and strcpy. */
         case LVAL_ERR:
             x->err = malloc(strlen(v->err) + 1);
-            strcpy(x->sym, v->sym);
+            strcpy(x->err, v->err);
             break;
 
         /* Copy lists by copying each sub-expression. */
@@ -565,7 +571,7 @@ lval *builtin_def(lenv *e, lval *a, char *op)
     while (a->count > 0) {
         sym = lval_pop(qexpr, 0);
         val = lval_pop(a, 0);
-        lenv_put(e, sym, lval_eval(e, val));
+        lenv_put(e, sym, val);
         lval_del(sym);
         lval_del(val);
     }
