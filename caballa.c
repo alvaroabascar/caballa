@@ -13,11 +13,20 @@
         lval_del(args); \
         return err; \
     }
+
 #define LASSERT_TYPE(del, got, expected, num, fn) \
     LASSERT(del, got->type == expected, \
             "Function '%s' passed incorrect type for argument %d. " \
-            "Expected %s, got %s.", \
+            "Expected %s, but got %s.", \
             fn, num, ltype_name(expected), ltype_name(got->type))
+
+
+#define LASSERT_NARGS(del, got, expected, fn) \
+    LASSERT(del, got == expected, \
+            "Function '%s' passed too %s arguments. " \
+            "Expected %d, but got %d.", \
+            fn, (got < expected ? "few" : "many"), expected, got)
+
 
 /* *********** WINDOWS SHIT *********** */
 
@@ -478,8 +487,7 @@ lval* lval_eval(lenv *e, lval *v)
 /* Evaluate a S-Expression. */
 lval *builtin_eval(lenv *e, lval *a)
 {
-    LASSERT(a, a->count == 1,
-            "Function 'eval' passed too many arguments.");
+    LASSERT_NARGS(a, a->count, 1, "eval");
     LASSERT_TYPE(a, a->cell[0], LVAL_QEXPR, 0, "eval");
 
     lval *x = lval_take(a, 0);
@@ -575,6 +583,7 @@ void lenv_put(lenv *e, lval *k, lval *v)
  */
 lval *builtin_def(lenv *e, lval *a, char *op)
 {
+    int i;
     lval *sym, *val;
     LASSERT(a, (a->count >= 2),
             "'def' must have at least two arguments: a quoted expression"
@@ -585,10 +594,8 @@ lval *builtin_def(lenv *e, lval *a, char *op)
             "first argument of 'def' cannot be the empty Q-Expression {}");
     LASSERT(a, (a->cell[0]->count == a->count - 1),
             "number of symbols in Q-Expression must match the number of values");
-    int i;
     for (i = 0; i < a->cell[0]->count; i++) {
-        LASSERT(a->cell[0], (a->cell[0]->cell[i]->type == LVAL_SYM),
-                "all values in the quoted expression must be symbols.");
+        LASSERT_TYPE(a, a->cell[0]->cell[i], LVAL_SYM, i, "def");
     }
     /* Add all the symbols to the environment. */
     while (a->count > 1) {
@@ -667,14 +674,8 @@ lval *builtin_div(lenv *e, lval *a)
 lval* builtin_head(lenv *e, lval *a)
 {
     /* Check error conditions. */
-    LASSERT(a, a->count == 1,
-            "Function 'head' passed too many arguments. "
-            "Got %d, expected %d.",
-            a->count, 1);
-    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-            "Function 'head' passed incorrect type. "
-            "Got %s, expected %s.",
-            ltype_name(a->cell[0]->type), ltype_name(LVAL_QEXPR));
+    LASSERT_NARGS(a, a->count, 1, "head");
+    LASSERT_TYPE(a, a->cell[0], LVAL_QEXPR, 0, "head");
     LASSERT(a, a->cell[0]->count != 0,
             "Function 'head' expected a non-emtpy Q-Expr, but was passed '{}'.");
 
