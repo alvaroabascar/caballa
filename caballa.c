@@ -569,34 +569,36 @@ void lenv_put(lenv *e, lval *k, lval *v)
 
 /******************** Builtin functions. *************************/
 
+/* Given an environment, a symbol (or set of symbols) inside a Q-Expression,
+ * and the same name of values, assign each value to each symbol in order inside the
+ * provided environment.
+ */
 lval *builtin_def(lenv *e, lval *a, char *op)
 {
-    lval *sym, *qexpr, *val;
+    lval *sym, *val;
     LASSERT(a, (a->count >= 2),
             "'def' must have at least two arguments: a quoted expression"
             " and an expression");
     
-    qexpr = lval_pop(a, 0);
-    LASSERT_TYPE(a, qexpr, LVAL_QEXPR, 0, "def");
-    LASSERT(a, (qexpr->count > 0),
+    LASSERT_TYPE(a, a->cell[0], LVAL_QEXPR, 0, "def");
+    LASSERT(a, (a->cell[0]->count > 0),
             "first argument of 'def' cannot be the empty Q-Expression {}");
-    LASSERT(a, (qexpr->count == a->count),
+    LASSERT(a, (a->cell[0]->count == a->count - 1),
             "number of symbols in Q-Expression must match the number of values");
     int i;
-    for (i = 0; i < qexpr->count; i++) {
-        LASSERT(qexpr, (qexpr->cell[i]->type == LVAL_SYM),
+    for (i = 0; i < a->cell[0]->count; i++) {
+        LASSERT(a->cell[0], (a->cell[0]->cell[i]->type == LVAL_SYM),
                 "all values in the quoted expression must be symbols.");
     }
     /* Add all the symbols to the environment. */
-    while (a->count > 0) {
-        sym = lval_pop(qexpr, 0);
-        val = lval_pop(a, 0);
+    while (a->count > 1) {
+        sym = lval_pop(a->cell[0], 0);
+        val = lval_pop(a, 1);
         lenv_put(e, sym, val);
         lval_del(sym);
         lval_del(val);
     }
     lval_del(a);
-    lval_del(qexpr);
     return lval_sexpr();
 }
 
