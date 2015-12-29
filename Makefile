@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -ansi -pedantic -Wall -std=c99 -g
+CFLAGS = -ansi -Wall -std=c99 -g
 LIBS = -ledit
 DEPS = libs/mpc/mpc.c
 INCLUDES = -I libs/mpc/
