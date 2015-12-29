@@ -7,8 +7,12 @@
 #define min(a, b) ((a > b) ? b : a)
 #define max(a, b) ((a < b) ? b : a)
 #define STREQ(a, b) (strcmp(a, b) == 0)
-#define LASSERT(args, cond, err) \
-    if (!(cond)) { lval_del(args); return lval_err(err); }
+#define LASSERT(args, cond, fmt, ...) \
+    if (!(cond)) { \
+        lval* err = lval_err(fmt, ##__VA_ARGS__); \
+        lval_del(args); \
+        return err; \
+    }
 
 /* *********** WINDOWS SHIT *********** */
 
@@ -101,6 +105,19 @@ void lval_del(lval *v);
 lval *lval_copy(lval *v);
 lval *lenv_get(lenv *e, lval *v);
 /**********************/
+
+char *ltype_name(int t)
+{
+    switch(t) {
+        case LVAL_FUN: return "Function";
+        case LVAL_NUM: return "Number";
+        case LVAL_ERR: return "Error";
+        case LVAL_SYM: return "Symbol";
+        case LVAL_SEXPR: return "S-Expression";
+        case LVAL_QEXPR: return "Q-Expression";
+        default: return "Unknown";
+    }
+}
 
 /******** Functions to create different types of lvals. *********/
 
@@ -585,6 +602,10 @@ lval *builtin_op(lenv *e, lval *a, char *op)
     /* Ensure all arguments are numbers. */
     int i;
     for (i = 0; i < a->count; i++) {
+        LASSERT(a, a->cell[i]->type == LVAL_NUM,
+                "Function '%s' passed incorrect type for argument %d. "
+                "Expected %s, got %s.",
+                op, i, ltype_name(LVAL_NUM), ltype_name(a->cell[i]->type));
         if (a->cell[i]->type != LVAL_NUM) {
             lval_del(a);
             return lval_err("Cannot operate on non-number!");
@@ -649,11 +670,15 @@ lval* builtin_head(lenv *e, lval *a)
 {
     /* Check error conditions. */
     LASSERT(a, a->count == 1,
-            "Function 'head' passed too many arguments.");
+            "Function 'head' passed too many arguments. "
+            "Got %d, expected %d.",
+            a->count, 1);
     LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-            "Function 'head' passed incorrect type.");
+            "Function 'head' passed incorrect type. "
+            "Got %s, expected %s.",
+            ltype_name(a->cell[0]->type), ltype_name(LVAL_QEXPR));
     LASSERT(a, a->cell[0]->count != 0,
-            "Function 'head' passed {}.");
+            "Function 'head' expected a non-emtpy Q-Expr, but was passed '{}'.");
 
     /* Otherwise take first argument. */
     lval *v = lval_take(a, 0);
