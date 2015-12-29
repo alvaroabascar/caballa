@@ -13,6 +13,11 @@
         lval_del(args); \
         return err; \
     }
+#define LASSERT_TYPE(del, got, expected, num, fn) \
+    LASSERT(del, got->type == expected, \
+            "Function '%s' passed incorrect type for argument %d. " \
+            "Expected %s, got %s.", \
+            fn, num, ltype_name(expected), ltype_name(got->type))
 
 /* *********** WINDOWS SHIT *********** */
 
@@ -475,8 +480,7 @@ lval *builtin_eval(lenv *e, lval *a)
 {
     LASSERT(a, a->count == 1,
             "Function 'eval' passed too many arguments.");
-    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-            "Function 'eval' passed too incorrect type.");
+    LASSERT_TYPE(a, a->cell[0], LVAL_QEXPR, 0, "eval");
 
     lval *x = lval_take(a, 0);
     x->type = LVAL_SEXPR;
@@ -573,12 +577,11 @@ lval *builtin_def(lenv *e, lval *a, char *op)
             " and an expression");
     
     qexpr = lval_pop(a, 0);
-    LASSERT(a, (qexpr->type = LVAL_QEXPR),
-            "first argument of 'def' must be a quoted expression");
+    LASSERT_TYPE(a, qexpr, LVAL_QEXPR, 0, "def");
     LASSERT(a, (qexpr->count > 0),
-            "first argument of 'def' cannot be empty {}");
+            "first argument of 'def' cannot be the empty Q-Expression {}");
     LASSERT(a, (qexpr->count == a->count),
-            "number of symbols in qexpr must match the number of values");
+            "number of symbols in Q-Expression must match the number of values");
     int i;
     for (i = 0; i < qexpr->count; i++) {
         LASSERT(qexpr, (qexpr->cell[i]->type == LVAL_SYM),
@@ -602,14 +605,7 @@ lval *builtin_op(lenv *e, lval *a, char *op)
     /* Ensure all arguments are numbers. */
     int i;
     for (i = 0; i < a->count; i++) {
-        LASSERT(a, a->cell[i]->type == LVAL_NUM,
-                "Function '%s' passed incorrect type for argument %d. "
-                "Expected %s, got %s.",
-                op, i, ltype_name(LVAL_NUM), ltype_name(a->cell[i]->type));
-        if (a->cell[i]->type != LVAL_NUM) {
-            lval_del(a);
-            return lval_err("Cannot operate on non-number!");
-        }
+        LASSERT_TYPE(a, a->cell[i], LVAL_NUM, i, op);
     }
 
     /* Pop the first element. */
