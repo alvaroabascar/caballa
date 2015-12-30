@@ -20,7 +20,6 @@
             "Expected %s, but got %s.", \
             fn, num, ltype_name(expected), ltype_name(got->type))
 
-
 #define LASSERT_NARGS(del, got, expected, fn) \
     LASSERT(del, got == expected, \
             "Function '%s' passed too %s arguments. " \
@@ -87,16 +86,21 @@ enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR, LVAL_FUN, LVAL_DEF 
 /* Struct to hold the result of an evaluation. */
 struct lval {
     int type;
+
+    /* Basic types */
     long num;
-    /* Error and symbol types have some string data */
     char *err;
-    /* sym is a string identifying the lval (when it's a symbol or function) */
     char *sym;
-    /* fun is a pointer to a function. */
-    lbuiltin fun;
-    /* Count and pointer to a list of "lval*" */
+
+    /* Function */
+    lbuiltin builtin_fun;
+    lenv *env;
+    lval *formals;
+    lval *body;
+
+    /* Expression */
     int count;
-    /* Cell is a pointer to an array of cells */
+    /* Cell is a pointer to an array of lvals (the children) */
     struct lval **cell;
 };
 
@@ -208,7 +212,7 @@ lval *lval_fun(lbuiltin func)
 {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_FUN;
-    v->fun = func;
+    v->builtin_fun = func;
     return v;
 }
 
@@ -255,7 +259,7 @@ lval *lval_copy(lval *v)
     switch(v->type) {
         /* Copy functions and numbers directly. */
         case LVAL_FUN:
-            x->fun = v->fun;
+            x->builtin_fun = v->builtin_fun;
             break;
 
         case LVAL_NUM:
@@ -471,7 +475,7 @@ lval* lval_eval_sexpr(lenv *e, lval *v)
     }
 
     /* Call function to get result. */
-    lval *result = f->fun(e, v);
+    lval *result = f->builtin_fun(e, v);
     lval_del(f);
     return result;
 }
