@@ -577,6 +577,19 @@ void lenv_put(lenv *e, lval *k, lval *v)
 
 /******************** Builtin functions. *************************/
 
+/* Print all the variables in the environment. */
+lval *builtin_getenv(lenv *e, lval *v)
+{
+    int i;
+    for (i = 0; i < e->count; i++) {
+        printf("(\"%s\" . ", e->syms[i]);
+        lval_print(e->vals[i]);
+        printf("\")\n");
+    }
+    return lval_sexpr();
+}
+
+
 /* Given an environment, a symbol (or set of symbols) inside a Q-Expression,
  * and the same name of values, assign each value to each symbol in order inside the
  * provided environment.
@@ -769,6 +782,7 @@ void lenv_add_builtins(lenv *e)
 
     /* Variable handling functions */
     lenv_add_builtin(e, "def", (lbuiltin)builtin_def);
+    lenv_add_builtin(e, "getenv", (lbuiltin)builtin_getenv);
 }
 
 /*************************************************************/
