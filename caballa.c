@@ -27,6 +27,12 @@
             "Expected %d, but got %d.", \
             fn, (got < expected ? "few" : "many"), expected, got)
 
+#define LASSERT_NARGS_RANGE(del, got, min, max, fn) \
+    LASSERT(del, (got >= min && got <= max), \
+            "Function '%s' passed too %s arguments. " \
+            "Expected from %d to %d, but got %d.", \
+            fn, (got < min ? "few" : "many"), min, max, got)
+
 
 /* *********** WINDOWS SHIT *********** */
 
@@ -749,9 +755,13 @@ lval* builtin_join(lenv *e, lval *a)
 /* Exit from the program. */
 lval *builtin_exit(lenv *e, lval *v)
 {
-    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "exit");
-    LASSERT_NARGS(v, v->count, 1, "exit");
-    exit(v->cell[0]->num);
+    int out = 0;
+    LASSERT_NARGS_RANGE(v, v->count, 0, 1, "exit");
+    if (v->count) {
+        LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "exit");
+        out = v->cell[0]->num;
+    }
+    exit(out);
 }
 
 /*************** Functions to handle builtins ****************/
