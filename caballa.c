@@ -110,7 +110,7 @@ lval *builtin_list(lenv *e, lval *a);
 lval *builtin_head(lenv *e, lval *a);
 lval *builtin_tail(lenv *e, lval *a);
 lval *builtin_join(lenv *e, lval *a);
-lval *builtin_quit(lenv *e, lval *a);
+lval *builtin_exit(lenv *e, lval *a);
 lval *lval_join(lenv *e, lval *x, lval *y);
 lval *lval_eval(lenv *e, lval *v);
 lval *lval_take(lval *v, int i);
@@ -747,11 +747,11 @@ lval* builtin_join(lenv *e, lval *a)
 }
 
 /* Exit from the program. */
-lval *builtin_quit(lenv *e, lval *a)
+lval *builtin_exit(lenv *e, lval *v)
 {
-    LASSERT(a, a->count == 0, "Function 'quit' should receive no arguments.");
-    return lval_num(23);
-    exit(0);
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "exit");
+    LASSERT_NARGS(v, v->count, 1, "exit");
+    exit(v->cell[0]->num);
 }
 
 /*************** Functions to handle builtins ****************/
@@ -783,6 +783,9 @@ void lenv_add_builtins(lenv *e)
     /* Variable handling functions */
     lenv_add_builtin(e, "def", (lbuiltin)builtin_def);
     lenv_add_builtin(e, "getenv", (lbuiltin)builtin_getenv);
+
+    /* Other */
+    lenv_add_builtin(e, "exit", (lbuiltin)builtin_exit);
 }
 
 /*************************************************************/
