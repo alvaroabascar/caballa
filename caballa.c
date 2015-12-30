@@ -456,8 +456,9 @@ lval* lval_eval_sexpr(lenv *e, lval *v)
         return v;
     }
 
-    /* Single expression: return first children, destroy sexpr. */
-    if (v->count == 1) {
+    /* Single expression: unless it's a function,
+     * return first children, destroy sexpr. */
+    if ((v->count == 1) && (v->cell[0]->type != LVAL_FUN)) {
         return lval_take(v, 0);
     }
     
