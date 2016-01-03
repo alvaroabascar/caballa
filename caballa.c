@@ -533,6 +533,15 @@ int lval_eq(lval *a, lval *b)
             }
         }
         return 1;
+    case LVAL_FUN:
+        /* If any is a builtin (ptr to a function), then
+         * we can compare these pointers. */
+        if (a->builtin_fun || b->builtin_fun) {
+            return a->builtin_fun == b->builtin_fun;
+        } else {
+            return lval_eq(a->formals, b->formals) &&
+                lval_eq(a->body, b->body);
+        }
     }
     return 0;
 }
