@@ -174,7 +174,7 @@ lval* lval_err(char *fmt, ...)
     v->err = malloc(2048);
     /* Fill error with the correct string. */
     vsnprintf(v->err, 2047, fmt, va);
-   
+
     /* Reallocate to number of bytes actually used. */
     v->err = realloc(v->err, strlen(v->err) + 1);
 
@@ -228,7 +228,7 @@ lval *lval_fun(lbuiltin func)
  */
 lval *lval_lambda(lval *formals, lval *body)
 {
-   lval *v = malloc(sizeof(lval)); 
+   lval *v = malloc(sizeof(lval));
    v->type = LVAL_FUN;
 
    /* builtin_fun = null indicates that this is a user defined function, and not a
@@ -416,7 +416,6 @@ lval* lval_read(mpc_ast_t *t)
     }
     return x;
 }
-
 lval *lval_call(lenv *e, lval *f, lval *v)
 {
     int given, total;
@@ -436,8 +435,28 @@ lval *lval_call(lenv *e, lval *f, lval *v)
             return lval_err("Function passed too many arguments. "
                             "Expected %d, but got %d.", total, given);
         }
+
         /* Pop the first symbol from the formals. */
         lval *sym = lval_pop(f->formals, 0);
+
+        /* Special case to deal with '&' */
+        if (STREQ(sym->sym, "&")) {
+
+            /* Ensure '&' is followed by another symbol */
+            if (f->formals->count != 1) {
+                lval_del(v);
+                return lval_err("Function format is invalid. "
+                                "Symbol '&' not followed by single symbol.");
+            }
+
+            /* Next formal should be bound to remaining arguments. */
+            lval *nsym = lval_pop(f->formals, 0);
+            lenv_put(f->env, nsym, builtin_list(e, v));
+            lval_del(sym);
+            lval_del(nsym);
+            break;
+        }
+
 
         /* Pop the next argument from the list. */
         lval *val = lval_pop(v, 0);
@@ -452,6 +471,27 @@ lval *lval_call(lenv *e, lval *f, lval *v)
     }
     /* Argument list is now bound so can be cleaned up. */
     lval_del(v);
+     /* If '&' remains in formal list bind to empty list. */
+     if (f->formals->count > 0 && STREQ(f->formals->cell[0]->sym, "&")) {
+         /* Check to ensure that '&' is not passed invalidly. */
+         if (f->formals->count != 2) {
+             return lval_err("Function format is invalid. "
+                             "Symbol '&' not followed by single symbol.");
+         }
+
+         /* Pop and delete '&' symbol. */
+         lval_del(lval_pop(f->formals, 0));
+
+         /* Pop next symbol and create empty list. */
+         lval *sym = lval_pop(f->formals, 0);
+         lval *val = lval_qexpr();
+
+         /* Bind to environment and delete. */
+         lenv_put(f->env, sym, val);
+         lval_del(sym);
+         lval_del(val);
+     }
+
 
     /* If all formals have been bound evaluate. */
     if (f->formals->count == 0) {
@@ -559,7 +599,7 @@ lval* lval_eval_sexpr(lenv *e, lval *v)
     if (v->count == 1) {
         return lval_take(v, 0);
     }
-    
+
     /* Ensure first element is a function after evaluation. */
     lval *f = lval_pop(v, 0);
     if (f->type != LVAL_FUN) {
@@ -738,7 +778,7 @@ lval *builtin_var(lenv *e, lval *a, char *op)
     LASSERT(a, (a->count >= 2),
             "'def' must have at least two arguments: a quoted expression"
             " and an expression");
-    
+
     LASSERT_TYPE(a, a->cell[0], LVAL_QEXPR, 0, "def");
     LASSERT(a, (a->cell[0]->count > 0),
             "first argument of 'def' cannot be the empty Q-Expression {}");
@@ -885,7 +925,7 @@ lval* builtin_join(lenv *e, lval *a)
     int i;
     for (i = 0; i < a->count; i++) {
         LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-                "Function 'join' passedincorrect type.");
+                "Function 'join' passed incorrect type.");
     }
 
     lval *x = lval_pop(a, 0);
@@ -927,7 +967,7 @@ lval *builtin_lambda(lenv *e, lval *a)
     lval *formals = lval_pop(a, 0);
     lval *body = lval_pop(a, 0);
     lval_del(a);
-    
+
     return lval_lambda(formals, body);
 }
 
