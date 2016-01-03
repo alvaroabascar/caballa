@@ -968,6 +968,67 @@ lval *builtin_lambda(lenv *e, lval *a)
     return lval_lambda(formals, body);
 }
 
+/*** Builtins for comparison ***/
+
+/* equal */
+lval *builtin_eq(lenv *e, lval *v)
+{
+    /* Check for two arguments, both numbers. */
+    LASSERT_NARGS(v, v->count, 2, "eq");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "eq");
+    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, "eq");
+    return lval_num(v->cell[0]->num == v->cell[1]->num);
+}
+
+/* greater */
+lval *builtin_gt(lenv *e, lval *v)
+{
+    /* Check for two arguments, both numbers. */
+    LASSERT_NARGS(v, v->count, 2, ">");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, ">");
+    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, ">");
+    return lval_num(v->cell[0]->num > v->cell[1]->num);
+}
+
+/* lesser */
+lval *builtin_lt(lenv *e, lval *v)
+{
+    /* Check for two arguments, both numbers. */
+    LASSERT_NARGS(v, v->count, 2, "<");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "<");
+    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, "<");
+    return lval_num(v->cell[0]->num < v->cell[1]->num);
+}
+
+/* greater or equal */
+lval *builtin_ge(lenv *e, lval *v)
+{
+    /* Check for two arguments, both numbers. */
+    LASSERT_NARGS(v, v->count, 2, ">=");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, ">=");
+    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, ">=");
+    return lval_num(v->cell[0]->num == v->cell[1]->num);
+}
+
+/* lesser or equal */
+lval *builtin_le(lenv *e, lval *v)
+{
+    /* Check for two arguments, both numbers. */
+    LASSERT_NARGS(v, v->count, 2, "<=");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "<=");
+    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, "<=");
+    return lval_num(v->cell[0]->num == v->cell[1]->num);
+}
+
+lval *builtin_not(lenv *e, lval *v)
+{
+    /* Check for one argument, a number. */
+    LASSERT_NARGS(v, v->count, 1, "not");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "not");
+
+    return lval_num(! v->cell[0]->num);
+}
+
 /*************** Functions to handle builtins ****************/
 
 void lenv_add_builtin(lenv *e, char *name, lbuiltin func)
@@ -999,6 +1060,14 @@ void lenv_add_builtins(lenv *e)
     lenv_add_builtin(e, "=", (lbuiltin)builtin_put);
     lenv_add_builtin(e, "getenv", (lbuiltin)builtin_getenv);
     lenv_add_builtin(e, "\\", (lbuiltin)builtin_lambda);
+
+    /* Comparison */
+    lenv_add_builtin(e, "not", (lbuiltin)builtin_not);
+    lenv_add_builtin(e, "<", (lbuiltin)builtin_lt);
+    lenv_add_builtin(e, "<=", (lbuiltin)builtin_le);
+    lenv_add_builtin(e, ">", (lbuiltin)builtin_gt);
+    lenv_add_builtin(e, ">=", (lbuiltin)builtin_ge);
+    lenv_add_builtin(e, "eq", (lbuiltin)builtin_eq);
 
     /* Other */
     lenv_add_builtin(e, "exit", (lbuiltin)builtin_exit);
