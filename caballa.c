@@ -471,26 +471,27 @@ lval *lval_call(lenv *e, lval *f, lval *v)
     }
     /* Argument list is now bound so can be cleaned up. */
     lval_del(v);
-     /* If '&' remains in formal list bind to empty list. */
-     if (f->formals->count > 0 && STREQ(f->formals->cell[0]->sym, "&")) {
-         /* Check to ensure that '&' is not passed invalidly. */
-         if (f->formals->count != 2) {
-             return lval_err("Function format is invalid. "
-                             "Symbol '&' not followed by single symbol.");
-         }
 
-         /* Pop and delete '&' symbol. */
-         lval_del(lval_pop(f->formals, 0));
+    /* If '&' remains in formal list bind to empty list. */
+    if (f->formals->count > 0 && STREQ(f->formals->cell[0]->sym, "&")) {
+        /* Check to ensure that '&' is not passed invalidly. */
+        if (f->formals->count != 2) {
+            return lval_err("Function format is invalid. "
+                            "Symbol '&' not followed by single symbol.");
+        }
 
-         /* Pop next symbol and create empty list. */
-         lval *sym = lval_pop(f->formals, 0);
-         lval *val = lval_qexpr();
+        /* Pop and delete '&' symbol. */
+        lval_del(lval_pop(f->formals, 0));
 
-         /* Bind to environment and delete. */
-         lenv_put(f->env, sym, val);
-         lval_del(sym);
-         lval_del(val);
-     }
+        /* Pop next symbol and create empty list. */
+        lval *sym = lval_pop(f->formals, 0);
+        lval *val = lval_qexpr();
+
+        /* Bind to environment and delete. */
+        lenv_put(f->env, sym, val);
+        lval_del(sym);
+        lval_del(val);
+    }
 
 
     /* If all formals have been bound evaluate. */
@@ -1020,6 +1021,7 @@ lval *builtin_le(lenv *e, lval *v)
     return lval_num(v->cell[0]->num == v->cell[1]->num);
 }
 
+/* negation */
 lval *builtin_not(lenv *e, lval *v)
 {
     /* Check for one argument, a number. */
@@ -1027,6 +1029,29 @@ lval *builtin_not(lenv *e, lval *v)
     LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "not");
 
     return lval_num(! v->cell[0]->num);
+}
+
+/* conditional (if (condition) {consequence} {alternative}) */
+lval *builtin_if(lenv *e, lval *v)
+{
+    /* Ensure we have 2 or three arguments,
+     * first is bool (number) and the other one
+     * or two are qexprs (code) */
+    LASSERT_NARGS_RANGE(v, v->count, 2, 3, "if");
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "if");
+    LASSERT_TYPE(v, v->cell[1], LVAL_QEXPR, 1, "if");
+    lval *code = NULL;
+    if (v->cell[0]->num) {
+        code = lval_pop(v, 1);
+    } else if (v->count == 3) {
+        LASSERT_TYPE(v, v->cell[2], LVAL_QEXPR, 2, "if");
+        code = lval_pop(v, 2);
+    }
+    code = (code ? code : lval_sexpr());
+    code->type = LVAL_SEXPR;
+    lval *result = lval_eval(e, code);
+    lval_del(v);
+    return result;
 }
 
 /*************** Functions to handle builtins ****************/
@@ -1068,6 +1093,9 @@ void lenv_add_builtins(lenv *e)
     lenv_add_builtin(e, ">", (lbuiltin)builtin_gt);
     lenv_add_builtin(e, ">=", (lbuiltin)builtin_ge);
     lenv_add_builtin(e, "eq", (lbuiltin)builtin_eq);
+
+    /* Conditionals */
+    lenv_add_builtin(e, "if", (lbuiltin)builtin_if);
 
     /* Other */
     lenv_add_builtin(e, "exit", (lbuiltin)builtin_exit);
