@@ -378,7 +378,6 @@ lval* lval_take(lval *v, int i)
     return x;
 }
 
-
 lval* lval_read_num(mpc_ast_t *t)
 {
     errno = 0;
@@ -416,6 +415,7 @@ lval* lval_read(mpc_ast_t *t)
     }
     return x;
 }
+
 lval *lval_call(lenv *e, lval *f, lval *v)
 {
     int given, total;
@@ -505,6 +505,36 @@ lval *lval_call(lenv *e, lval *f, lval *v)
         /* Otherwise return partially evaluated function. */
         return lval_copy(f);
     }
+}
+
+int lval_eq(lval *a, lval *b)
+{
+    /* If type is different, they are different. */
+    if (a->type != b->type) {
+        return 0;
+    }
+
+    switch(a->type) {
+
+    case LVAL_NUM:
+        return a->num == b->num;
+    case LVAL_SYM:
+        return STREQ(a->sym, b->sym);
+    case LVAL_ERR:
+        return STREQ(a->err, b->err);
+    case LVAL_SEXPR:
+    case LVAL_QEXPR:
+        if (a->count != b->count) {
+            return 0;
+        }
+        for (int i = 0; i < a->count; i++) {
+            if (! lval_eq(a->cell[i], b->cell[i])) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    return 0;
 }
 
 /*****************************************************************/
@@ -1004,7 +1034,9 @@ lval *builtin_ord(lenv *e, lval *v, char *op)
 /* equal */
 lval *builtin_eq(lenv *e, lval *v)
 {
-    return builtin_ord(e, v, "eq");
+    int res = lval_eq(v->cell[0], v->cell[1]);
+    lval_del(v);
+    return lval_num(res);
 }
 
 /* greater */
