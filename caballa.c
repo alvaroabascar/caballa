@@ -971,54 +971,64 @@ lval *builtin_lambda(lenv *e, lval *a)
 
 /*** Builtins for comparison ***/
 
+lval *builtin_ord(lenv *e, lval *v, char *op)
+{
+    LASSERT_NARGS(v, v->count, 2, op);
+    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, op);
+    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, op);
+
+    int r;
+    int a = v->cell[0]->num;
+    int b = v->cell[1]->num;
+    lval_del(v);
+
+    if (STREQ(op, "equal")) {
+        r = (a == b);
+    }
+    if (STREQ(op, "<=")) {
+        r = (a <= b);
+    }
+    if (STREQ(op, ">=")) {
+        r = (a >= b);
+    }
+    if (STREQ(op, "<")) {
+        r = (a < b);
+    }
+    if (STREQ(op, ">")) {
+        r = (a > b);
+    }
+
+    return lval_num(r);
+}
+
 /* equal */
 lval *builtin_eq(lenv *e, lval *v)
 {
-    /* Check for two arguments, both numbers. */
-    LASSERT_NARGS(v, v->count, 2, "eq");
-    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "eq");
-    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, "eq");
-    return lval_num(v->cell[0]->num == v->cell[1]->num);
+    return builtin_ord(e, v, "eq");
 }
 
 /* greater */
 lval *builtin_gt(lenv *e, lval *v)
 {
-    /* Check for two arguments, both numbers. */
-    LASSERT_NARGS(v, v->count, 2, ">");
-    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, ">");
-    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, ">");
-    return lval_num(v->cell[0]->num > v->cell[1]->num);
+    return builtin_ord(e, v, ">");
 }
 
 /* lesser */
 lval *builtin_lt(lenv *e, lval *v)
 {
-    /* Check for two arguments, both numbers. */
-    LASSERT_NARGS(v, v->count, 2, "<");
-    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "<");
-    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, "<");
-    return lval_num(v->cell[0]->num < v->cell[1]->num);
+    return builtin_ord(e, v, "<");
 }
 
 /* greater or equal */
 lval *builtin_ge(lenv *e, lval *v)
 {
-    /* Check for two arguments, both numbers. */
-    LASSERT_NARGS(v, v->count, 2, ">=");
-    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, ">=");
-    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, ">=");
-    return lval_num(v->cell[0]->num == v->cell[1]->num);
+    return builtin_ord(e, v, ">=");
 }
 
 /* lesser or equal */
 lval *builtin_le(lenv *e, lval *v)
 {
-    /* Check for two arguments, both numbers. */
-    LASSERT_NARGS(v, v->count, 2, "<=");
-    LASSERT_TYPE(v, v->cell[0], LVAL_NUM, 0, "<=");
-    LASSERT_TYPE(v, v->cell[1], LVAL_NUM, 1, "<=");
-    return lval_num(v->cell[0]->num == v->cell[1]->num);
+    return builtin_ord(e, v, "<=");
 }
 
 /* negation */
