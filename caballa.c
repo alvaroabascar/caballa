@@ -1082,6 +1082,47 @@ lval *builtin_not(lenv *e, lval *v)
     return lval_num(! v->cell[0]->num);
 }
 
+/* and */
+lval *builtin_and(lenv *e, lval *v)
+{
+    int i;
+    lval *res;
+    /* Ensure all arguments are of type num. */
+    for (i = 0; i < v->count; i++) {
+        LASSERT_TYPE(v, v->cell[i], LVAL_NUM, i, "and");
+    }
+    for (i = 0; i < v->count; i++) {
+        if (!v->cell[i]->num) {
+            res = lval_pop(v, i);
+            lval_del(v);
+            return res;
+        }
+    }
+    res = lval_pop(v, v->count-1);
+    lval_del(v);
+    return res;
+}
+
+/* or */
+lval *builtin_or(lenv *e, lval *v)
+{
+    int i;
+    lval *res;
+    /* Ensure all arguments are of type num. */
+    for (i = 0; i < v->count; i++) {
+        LASSERT_TYPE(v, v->cell[i], LVAL_NUM, i, "or");
+    }
+    for (i = 0; i < v->count; i++) {
+        if (v->cell[i]->num) {
+            res = lval_pop(v, i);
+            lval_del(v);
+            return res;
+        }
+    }
+    lval_del(v);
+    return lval_num(0);
+}
+
 /* conditional (if (condition) {consequence} {alternative}) */
 lval *builtin_if(lenv *e, lval *v)
 {
@@ -1147,6 +1188,8 @@ void lenv_add_builtins(lenv *e)
 
     /* Conditionals */
     lenv_add_builtin(e, "if", (lbuiltin)builtin_if);
+    lenv_add_builtin(e, "and", (lbuiltin)builtin_and);
+    lenv_add_builtin(e, "or", (lbuiltin)builtin_or);
 
     /* Other */
     lenv_add_builtin(e, "exit", (lbuiltin)builtin_exit);
